@@ -1,30 +1,69 @@
-var terms = "streetwear";
+var subreddit = "streetwear";
 var search_text = "nike";
+var date_from = new Date(1970, 01, 01) * 1000;
+var date_to = new Date(Date.now()) * 1000;
+var count = 0;
+var data = {};
+
 function requestJson() {
+  if (document.querySelector('#subreddit').value != '')
+    subreddit = document.querySelector('#subreddit').value;
+
   if (document.querySelector('#search_text').value != '')
     search_text = document.querySelector('#search_text').value;
 
-  var request = new XMLHttpRequest();
-  request.open('GET', 'https://reddit.com/r/' + terms + "/search.json" + "?q=" + search_text, true);
+  if (document.querySelector('#date_from').value != '')
+    date_from = convertToUnixTimestamp(document.querySelector('#date_from').value);
+  if (document.querySelector('#date_to').value != '')
+    date_to = convertToUnixTimestamp(document.querySelector('#date_to').value);
 
-  request.onload = function() {
-    if (request.status >= 200 && request.status < 400) {
-      var data = JSON.parse(request.responseText);
-      console.log(data.data);
-      createDynamicElements(data.data);
-    } else {
-    }
-  };
+  let exp_timestamp = new Date();
+  exp_timestamp.setMinutes(exp_timestamp.getMinutes() + 5);
+  exp_timestamp = exp_timestamp * 1000;
+  if (localStorage.data != undefined) {
+    data = JSON.parse(localStorage.data);
+  }
+  if (localStorage.data != undefined && data.exp_timestamp > new Date() * 1000 && data.subreddit === subreddit && data.search_text === search_text) {
+    console.log('data fetched from localStorage');
+    createDynamicElements(data);
+  } else {
+    let localData = [];
+    console.log('data fetched from reddit');
+    let request = new XMLHttpRequest();
+    request.open('GET', 'https://reddit.com/r/' + subreddit + "/search.json" + "?q=" + search_text + "&limit=100", true);
 
-  request.onerror = function() {
-  };
+    request.onload = function() {
+      if (request.status >= 200 && request.status < 400) {
+        data = JSON.parse(request.responseText);
+        for (i = 0; i < data.data.children.length; i++) {
+          localData.push(data.data.children[i]);
+        }
+        data = {
+          subreddit,
+          search_text,
+          exp_timestamp,
+          children: localData
+        }
+        //save to localStorage
+        localStorage.setItem("data", JSON.stringify(data));
+        createDynamicElements(data);
+      } else {
+        return;
+      }
+    };
+    request.onerror = function() {
+    };
 
-  request.send();
+    request.send();
+  }
 }
 
 function createDynamicElements(data) {
   for (i = 0; i < data.children.length; i++) {
-    if (data.children[i].data.thumbnail != "self" && data.children[i].data.thumbnail != "image" && data.children[i].data.thumbnail != "default") {
+    createdDate = convertTimestamp(data.children[i].data.created);
+    createdDate = convertToUnixTimestamp(createdDate.substr(6, 4) + '-' + createdDate.substr(3, 2) + '-' + createdDate.substr(0, 2));
+
+    if (data.children[i].data.thumbnail != "self" && data.children[i].data.thumbnail != "image" && data.children[i].data.thumbnail != "default" && createdDate >= date_from && createdDate <= date_to) {
       var iLi = document.createElement('li');
       iLi.className = 'c-tile-list__item';
       document.getElementsByTagName('ul')[0].appendChild(iLi);
@@ -64,20 +103,13 @@ function createDynamicElements(data) {
     }
 
   }
-  setTimeout(()=>{document.getElementById('loader').classList.remove("loading")}, 2000);
-
+  setTimeout(()=>{document.getElementById('loader').classList.remove("loading")}, 5000);
+  // document.querySelector('#loader').classList.remove("loading");
 }
 
-function fillUpDate() {
-  document.getElementById('date_from').value = convertTimestamp(Date.now());
-  document.getElementById('date_to').value = convertTimestamp(Date.now());
-  console.log(convertTimestamp(Date.now()));
-}
-
-fillUpDate();
-
-function convertToUnixTimestamp(theId) {
-    var d = document.getElementById(theId).value;
+function convertToUnixTimestamp(theDate) {
+    d = new Date(theDate.substr(0, 4), theDate.substr(5, 2), theDate.substr(8, 2)) * 1000;
+    return d;
     // return new Date();
 }
 
